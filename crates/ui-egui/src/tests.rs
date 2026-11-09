@@ -1305,6 +1305,41 @@ fn view_tab_zoom_steps_from_the_shown_zoom_in_fit_modes() {
     assert!((frame(&mut a) - 1.0).abs() < 1e-3);
 }
 
+/// Issue #6113: Page Width did nothing in Draft view. It now zooms the Draft column to the
+/// window, Zoom In steps from the shown zoom, and One Page stays ignored (Draft has no pages).
+#[test]
+fn page_width_zooms_the_draft_column_to_the_window() {
+    let ctx = egui::Context::default();
+    let mut a = app();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0));
+    let frame = |a: &mut WordApp| {
+        for _ in 0..4 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            ctx.run_ui(input, |ui| {
+                a.logic(ui.ctx());
+                a.ui(ui);
+            })
+            .drop_without_applying_deltas();
+        }
+        a.canvas.scale / canvas::PX_PER_PT
+    };
+    a.run("view.draft", json!({})).unwrap();
+    let base = frame(&mut a);
+    assert!((base - 1.0).abs() < 1e-3, "Draft starts at 100%: {base}");
+    let base_width = a.canvas.page_rects[0].width();
+    a.run("view.pageWidth", json!({})).unwrap();
+    let fitted = frame(&mut a);
+    assert!((fitted - base).abs() > 0.05, "Page Width changes the Draft zoom: {base} -> {fitted}");
+    assert!((a.canvas.page_rects[0].width() / base_width - fitted / base).abs() < 0.01, "the column follows the zoom");
+    assert!((a.session.view.zoom - fitted).abs() < 1e-3, "session zoom follows the shown zoom");
+    a.run("view.zoomIn", json!({})).unwrap();
+    let zin = frame(&mut a);
+    assert!(zin > fitted, "Zoom In zooms in from the shown zoom: {fitted} -> {zin}");
+    a.run("view.onePage", json!({})).unwrap();
+    let one_page = frame(&mut a);
+    assert!((one_page - zin).abs() < 1e-3, "One Page does nothing in Draft: {zin} -> {one_page}");
+}
+
 /// Issue #122: touchpad deltas scroll the page 1:1 at once; a wheel notch eases in to about
 /// three lines.
 #[test]

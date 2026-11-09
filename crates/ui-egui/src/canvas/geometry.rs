@@ -184,7 +184,7 @@ pub fn geometry(app: &WordApp, l: &DocLayout, avail: egui::Vec2) -> Geometry {
         "multiplePages" => scale = ((avail.y - 2.0 * GAP) / maxh).min((avail.x - 3.0 * GAP) / (2.0 * maxw)).clamp(0.05, 6.0),
         _ => {}
     }
-    if web {
+    if web && !fit_zooms_column(v.mode, &v.fit) {
         scale = PX_PER_PT * v.zoom.clamp(0.1, 5.0);
     }
     if !scale.is_finite() {
@@ -233,8 +233,16 @@ pub fn geometry(app: &WordApp, l: &DocLayout, avail: egui::Vec2) -> Geometry {
 /// Page Width jumped to 110% (issue #67).
 pub fn sync_fit_zoom(app: &mut WordApp, scale: f32) {
     let v = &mut app.session.view;
-    if v.fit.is_empty() || v.read_mode || v.mode != wordcraft_layout::ViewMode::Print || !scale.is_finite() {
+    let sized_by_fit = v.mode == wordcraft_layout::ViewMode::Print || fit_zooms_column(v.mode, &v.fit);
+    if v.fit.is_empty() || v.read_mode || !sized_by_fit || !scale.is_finite() {
         return;
     }
     v.zoom = (scale / PX_PER_PT).clamp(0.1, 5.0);
+}
+
+/// Draft and Outline lay text out in a fixed column, so Page Width can zoom that column to the
+/// window (#6113). Web Layout re-wraps to the window instead, and One Page and Multiple Pages
+/// need whole pages, which these views don't have: those fits stay ignored there.
+fn fit_zooms_column(mode: wordcraft_layout::ViewMode, fit: &str) -> bool {
+    matches!(mode, wordcraft_layout::ViewMode::Draft | wordcraft_layout::ViewMode::Outline) && fit == "pageWidth"
 }
